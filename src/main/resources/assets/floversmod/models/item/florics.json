@@ -1,6 +1,6 @@
 {
   "parent": "minecraft:item/generated",
   "textures": {
-    "layer0": "tosturitestmod:item/florics"
+    "layer0": "floversmod:item/florics"
   }
 }
