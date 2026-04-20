@@ -1,5 +1,6 @@
 package com.tosturi.floversemod.entity;
 
+import com.tosturi.floversemod.FloVerseMod;
 import com.tosturi.floversemod.entity.custom.TigerGirlEntity;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
@@ -10,9 +11,8 @@ import net.neoforged.neoforge.registries.DeferredRegister;
 
 public class ModEntities {
 
-    private static final String MODID = "floversemod";
     public static final DeferredRegister<EntityType<?>> ENTITY_TYPES =
-            DeferredRegister.create(Registries.ENTITY_TYPE, com.tosturi.floversemod.FloVerseMod.MODID);
+            DeferredRegister.create(Registries.ENTITY_TYPE, FloVerseMod.MODID);
 
     public static final DeferredHolder<EntityType<?>, EntityType<TigerGirlEntity>> TIGER_GIRL =
             ENTITY_TYPES.register("tiger_girl",

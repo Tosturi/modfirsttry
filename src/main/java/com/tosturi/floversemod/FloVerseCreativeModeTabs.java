@@ -12,7 +12,7 @@ public class FloVerseCreativeModeTabs {
 
     public static final DeferredRegister<CreativeModeTab> CREATIVE_MODE_TABS = DeferredRegister.create(Registries.CREATIVE_MODE_TAB, FloVerseMod.MODID);
 
-    public static final DeferredHolder<CreativeModeTab, CreativeModeTab> FLOVERS_TAB = CREATIVE_MODE_TABS.register(
+    public static final DeferredHolder<CreativeModeTab, CreativeModeTab> FLOVERSE_TAB = CREATIVE_MODE_TABS.register(
             "floverse_tab",
             () -> CreativeModeTab.builder()
                     .title(Component.translatable("floverse_tab.title"))
