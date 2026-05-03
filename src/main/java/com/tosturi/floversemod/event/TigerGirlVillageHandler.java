@@ -62,15 +62,13 @@ public class TigerGirlVillageHandler {
                 .getInRange(h -> h.is(PoiTypes.MEETING), villagerPos, 64, PoiManager.Occupancy.ANY)
                 .map(PoiRecord::getPos)
                 .findFirst()
-                .ifPresentOrElse(bellPos -> {
+                .ifPresent(bellPos -> {
                     TigerGirlVillageData data = TigerGirlVillageData.get(level);
                     if (data.registerVillage(bellPos)) {
                         LOGGER.info("[TigerGirl] New village registered at bell {}, attempting spawn", bellPos);
                         spawnTigerGirl(level, bellPos, data);
-                    } else {
-                        LOGGER.debug("[TigerGirl] Village at bell {} already registered, skipping", bellPos);
                     }
-                }, () -> LOGGER.debug("[TigerGirl] Villager {} joined with no MEETING POI within 64 blocks", villager.getUUID()));
+                });
     }
 
     // -----------------------------------------------------------------------
