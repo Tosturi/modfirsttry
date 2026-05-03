@@ -16,8 +16,10 @@ import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
+import net.neoforged.neoforge.event.server.ServerStartingEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 import org.slf4j.Logger;
@@ -36,6 +38,11 @@ public class TigerGirlVillageHandler {
     private static int tickCounter = 0;
 
     private static final TigerGirlRespawnManager respawnManager = new TigerGirlRespawnManager();
+
+    @SubscribeEvent
+    public static void onServerStarting(ServerStartingEvent event) {
+        tickCounter = 0;
+    }
 
     // -----------------------------------------------------------------------
     // Village registration — fired once per villager spawn, not on a global scan
@@ -73,6 +80,7 @@ public class TigerGirlVillageHandler {
         tickCounter = 0;
 
         for (ServerLevel level : event.getServer().getAllLevels()) {
+            if (level.dimension() != Level.OVERWORLD) continue;
             TigerGirlVillageData data = TigerGirlVillageData.get(level);
 
             // Fire due respawn timers
@@ -147,7 +155,10 @@ public class TigerGirlVillageHandler {
         }
 
         entity.teleportTo(spawnPos.getX() + 0.5, spawnPos.getY(), spawnPos.getZ() + 0.5);
-        level.addFreshEntity(entity);
+        if (!level.addFreshEntity(entity)) {
+            LOGGER.error("[TigerGirl] addFreshEntity() rejected entity at {}", spawnPos);
+            return;
+        }
         data.setTigerGirl(bell, entity.getUUID());
         LOGGER.info("[TigerGirl] Spawned TigerGirl {} at X={} Y={} Z={} (bell {})",
                 entity.getUUID(), spawnPos.getX(), spawnPos.getY(), spawnPos.getZ(), bell);

@@ -153,25 +153,6 @@ public class TigerGirlVillageData extends SavedData {
         return Map.copyOf(pendingRespawns);
     }
 
-    public void markVillageDead(BlockPos center) {
-        BlockPos key = normalizePos(center);
-        VillageEntry old = villageEntries.get(key);
-        if (old != null) {
-            if (old.tigerGirlUUID() != null) uuidToVillage.remove(old.tigerGirlUUID());
-            villageEntries.put(key, new VillageEntry(null, true));
-            setDirty();
-        }
-    }
-
-    public void reviveVillage(BlockPos center) {
-        BlockPos key = normalizePos(center);
-        VillageEntry old = villageEntries.get(key);
-        if (old != null) {
-            villageEntries.put(key, new VillageEntry(old.tigerGirlUUID(), false));
-            setDirty();
-        }
-    }
-
     @Nullable
     public VillageEntry getEntry(BlockPos center) {
         return villageEntries.get(normalizePos(center));
@@ -210,8 +191,5 @@ public class TigerGirlVillageData extends SavedData {
                         .forGetter(VillageEntry::villageDead)
         ).apply(i, VillageEntry::new));
 
-        public boolean needsInitialSpawn() {
-            return tigerGirlUUID == null && !villageDead;
-        }
     }
 }
