@@ -57,47 +57,75 @@ A villager-like NPC that inhabits villages. She does not despawn naturally, does
 
 ### 1 — Village Detection
 
-**Trigger:** every time any villager entity joins a server level (world load, chunk load, natural spawn).
+**Primary trigger:** a 600-tick server tick loop scans for `MEETING` POIs within 128 blocks of each player. This is the reliable discovery path — it runs after all chunks are fully loaded, avoiding the race condition where the bell's POI chunk isn't ready yet.
 
-**Logic:**
-1. Take the villager's current position.
-2. Search the POI (Point of Interest) system for a `MEETING` type POI (the bell) within 64 blocks.
-3. If a bell is found, check whether this village is already tracked in persistent storage.
-4. If it is new — register it and immediately spawn a TigerGirl near the bell.
-5. If it is already registered — do nothing.
+**Secondary trigger (fast path):** `EntityJoinLevelEvent` fires when any `Villager` joins the level. The handler searches for a `MEETING` POI within 64 blocks of the villager's physical position. This catches the common case immediately on world load when POIs happen to be ready.
 
-**Why villager position instead of HOME memory:** the HOME brain memory is not populated when `EntityJoinLevelEvent` fires on world load (memories restore after the event). The villager's physical position is always available and is always near the village.
+**Logic (both paths):**
+1. Find the bell (`MEETING` POI) near the trigger position.
+2. Call `registerVillage(bellPos)` — normalizes the bell position to the nearest 32-block grid and checks if this village is already tracked.
+3. If new: register it and call `spawnTigerGirl`.
+4. If already registered: do nothing (no log — expected steady state).
 
 **Village key:** the bell position is snapped to the nearest 32-block grid (X and Z only) to prevent multiple registrations for the same village due to minor position differences.
 
-**Multiple bells:** if a second bell is found within `VILLAGE_RADIUS` blocks of an already-registered village, it is treated as belonging to the same village and ignored. This ensures villages with more than one bell still get exactly one TigerGirl.
+**Multiple bells:** if a second bell is found within `VILLAGE_RADIUS` blocks of an already-registered village, it is treated as belonging to the same village and ignored.
 
 ---
 
 ### 2 — Spawn Position Selection
 
-When a TigerGirl needs to be spawned near a bell, the system picks a random surface position nearby:
+When a TigerGirl needs to be spawned near a bell:
 
-1. Choose a random offset within a radius derived from `VILLAGE_RADIUS` config (capped at 16 blocks).
-2. Query the heightmap for the top solid surface at that X/Z.
-3. Validate the candidate: the surface block and the one below it must both be solid (rejects rooftops, which have hollow space underneath), and the two blocks above must be air (enough headroom).
-4. Retry up to 10 times. If no valid position is found, the spawn is skipped (will be retried by the liveness check on the next cycle).
+1. **Chunk guard:** if the bell's chunk is not loaded, defer — skip the attempt and reschedule for `CHECK_INTERVAL` (600) ticks later. Heightmap and block-state queries return garbage on unloaded chunks.
+2. **Duplicate guard:** check for an existing `TigerGirlEntity` within `VILLAGE_RADIUS` of the bell. If one is found, repair the data mapping and abort — prevents duplicate spawns if saved data was lost between sessions.
+3. Choose a random offset within a radius derived from `VILLAGE_RADIUS` (capped at 16 blocks).
+4. Skip attempt if that chunk is not loaded.
+5. Query the heightmap (`MOTION_BLOCKING_NO_LEAVES`) for the top surface at that X/Z.
+6. Validate: `canSeeSky(surface)` must be true (rejects positions under rooftops or building overhangs; accepts open ground, paths, plazas), the block below must be solid, and the two blocks above must be air.
+7. Retry up to 30 times. If no valid position is found, schedule a retry for `CHECK_INTERVAL` ticks later (not the full respawn delay).
+
+TigerGirl's home position is set to the bell with a 20-block radius (`setHomeTo(bell, 20)`) before she is added to the world. `Mob` persists `home_pos` and `home_radius` to NBT automatically.
 
 ---
 
 ### 3 — TigerGirl AI
 
-TigerGirl uses Minecraft's **Brain** system (the same used by vanilla villagers), which is activity-based rather than goal-based.
+TigerGirl uses Minecraft's **Brain** system, which is activity-based rather than goal-based.
+
+**Attributes:**
+- Max health: 100 HP
+- Movement speed: 0.5 (idle) / 0.65 (chasing, 1.3× modifier)
+- Attack damage: 6 HP per hit
+- Follow range: 32 blocks
+
+**Sensors:** `NEAREST_LIVING_ENTITIES`, `NEAREST_PLAYERS`, `VILLAGER_HOSTILES` (populates `NEAREST_HOSTILE`), `HURT_BY`.
 
 **CORE activity** (always running):
-- Floats in water instead of drowning.
-- Continuously tracks and rotates toward the current look target.
+- Floats in water.
+- Tracks and rotates toward current look target.
+- Executes `WALK_TARGET` navigation (`MoveToTargetSink` — required for any movement to work).
 
 **IDLE activity** (default):
-- Wanders randomly around the area at a slow pace.
-- Occasionally turns to look at nearby players.
+- `StartAttacking` (priority 1): detects the nearest hostile entity (`NEAREST_HOSTILE` memory), sets it as `ATTACK_TARGET`. Skipped while trading.
+- `RandomStroll` (priority 2): wanders slowly at 0.5 speed within the 20-block home radius around the bell. `LandRandomPos` respects `setHomeTo` automatically via `GoalUtils.mobRestricted()`.
+- `SetEntityLookTargetSometimes` (priority 3): occasionally looks at nearby players.
 
-She has no combat, no schedule, and no job site. She exists purely to interact with the player via trade.
+**FIGHT activity** (activates when `ATTACK_TARGET` memory is present):
+- `StopAttackingIfTargetInvalid`: clears the target if it dies or becomes unreachable.
+- `SetWalkTargetFromAttackTargetIfTargetOutOfReach` at 0.65 speed: chases the target.
+- `MeleeAttack` with 20-tick cooldown: strikes when in range.
+- On exit: erases `ATTACK_TARGET` and `WALK_TARGET` for clean state.
+
+**Activity transitions:** `brain.setActiveActivityToFirstValid(FIGHT, IDLE)` is called every tick in `customServerAiStep` after the brain ticks.
+
+**Combat leash:** if TigerGirl drifts more than `homeRadius + 16` blocks (36 blocks) from the bell while in combat, `ATTACK_TARGET` and `WALK_TARGET` are cleared and navigation is stopped. This ensures she stays close enough to the bell that the liveness check always finds her in a loaded chunk.
+
+**Stop when trading:** every tick while `isTrading()` is true, `WALK_TARGET` is erased and navigation is stopped. This prevents `RandomStroll` from setting a new target on the very next tick.
+
+**Persistence:** calls `setPersistenceRequired()` in the constructor. `AbstractVillager` does not override `checkDespawn()` in this MC version, so without this flag she would despawn like a regular mob when the player is >128 blocks away.
+
+**Zombie immunity:** `LivingConversionEvent.Pre` is cancelled for `TigerGirlEntity` in the event handler.
 
 ---
 
@@ -130,12 +158,14 @@ Both trades have unlimited uses and grant no experience. The trade set uses Mine
 
 **Respawn tick loop** (runs every 600 ticks ≈ 30 seconds):
 1. Collect all pending respawn entries whose scheduled tick has passed.
-2. For each due entry, spawn a new TigerGirl near the bell.
+2. **Skip if the bell's chunk is not loaded** — heightmap queries on unloaded chunks return garbage, causing spawn to fail. Defer by rescheduling for the next cycle.
+3. For each due entry, call `spawnTigerGirl` (which includes the duplicate guard and position search).
 
 **Liveness check** (same 600-tick loop):
 - For each registered village that has a TigerGirl UUID recorded, verify the entity still exists and is alive.
-- This check is **skipped if the bell's chunk is not loaded** — an unloaded chunk means `getEntity()` would return null even for a living entity, producing a false positive.
-- If the entity is genuinely missing (chunk loaded, entity not found), treat it the same as a death and schedule a respawn.
+- **Requires a player within `VILLAGE_RADIUS` blocks (XZ) of the bell** before checking. This guarantees that both the bell's chunk and TigerGirl's chunk (within 36 blocks of the bell, due to the combat leash) are fully loaded — eliminating false positives caused by TigerGirl's chunk loading a tick after the bell's chunk.
+- **Orphan repair:** before scheduling a respawn, check for any `TigerGirlEntity` within `VILLAGE_RADIUS` of the bell. If one exists but with a different UUID (data was lost/repaired partially), update the mapping and skip the respawn.
+- If the entity is genuinely missing (player nearby, entity not found, no orphan), treat it the same as a death and schedule a respawn.
 
 ---
 
@@ -169,5 +199,5 @@ Two values exposed in `floversemod-common.toml`:
 ## Known Limitations
 
 - **TigerGirl model is a placeholder** — she currently renders using the vanilla villager texture. A custom Blockbench model has not been created yet.
-- **Villager with no nearby bell** — a villager that loads more than 64 blocks from any bell will not trigger village registration. The village will be registered when another villager with a closer HOME loads.
-- **No hostile mob protection** — TigerGirl has no combat AI and will not flee from threats.
+- **Village discovery delay** — discovery via the tick scan has up to a 30-second delay on first visit. The `EntityJoinLevelEvent` fast path reduces this in most cases, but is not guaranteed when POIs aren't ready at chunk load time.
+- **`villageDead` flag unused** — persisted in `VillageEntry` but not yet acted on. Reserved for future dead-village detection (all villagers gone).

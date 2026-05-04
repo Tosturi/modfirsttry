@@ -5,12 +5,17 @@ import com.google.common.collect.ImmutableSet;
 import com.mojang.datafixers.util.Pair;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.network.syncher.EntityDataAccessor;
+import net.minecraft.network.syncher.EntityDataSerializers;
+import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.AgeableMob;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.AnimationState;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
@@ -23,6 +28,7 @@ import net.minecraft.world.entity.ai.behavior.LookAtTargetSink;
 import net.minecraft.world.entity.ai.behavior.MeleeAttack;
 import net.minecraft.world.entity.ai.behavior.MoveToTargetSink;
 import net.minecraft.world.entity.ai.behavior.RandomStroll;
+import net.minecraft.world.entity.ai.behavior.RunOne;
 import net.minecraft.world.entity.ai.behavior.SetEntityLookTargetSometimes;
 import net.minecraft.world.entity.ai.behavior.SetWalkTargetFromAttackTargetIfTargetOutOfReach;
 import net.minecraft.world.entity.ai.behavior.StartAttacking;
@@ -31,6 +37,7 @@ import net.minecraft.world.entity.ai.behavior.Swim;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.ai.memory.MemoryStatus;
 import net.minecraft.world.entity.ai.sensing.SensorType;
+import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.npc.villager.AbstractVillager;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.schedule.Activity;
@@ -40,13 +47,26 @@ import net.minecraft.world.item.trading.TradeSet;
 import net.minecraft.world.level.Level;
 import net.minecraft.util.profiling.Profiler;
 import net.minecraft.util.profiling.ProfilerFiller;
+import net.minecraft.world.entity.ai.memory.WalkTarget;
+import net.minecraft.world.phys.AABB;
 import org.jetbrains.annotations.Nullable;
 import org.jspecify.annotations.NonNull;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 public class TigerGirlEntity extends AbstractVillager {
+
+    private static final EntityDataAccessor<Boolean> DATA_IS_ATTACKING =
+            SynchedEntityData.defineId(TigerGirlEntity.class, EntityDataSerializers.BOOLEAN);
+
+    private static final byte EVENT_ATTACK_ANIM = 60;
+
+    public final AnimationState idleAnimationState = new AnimationState();
+    public final AnimationState walkAnimationState = new AnimationState();
+    public final AnimationState runAnimationState = new AnimationState();
+    public final AnimationState attackAnimationState = new AnimationState();
 
     private static final ResourceKey<TradeSet> TIGER_GIRL_TRADES = ResourceKey.create(
             Registries.TRADE_SET,
@@ -72,13 +92,26 @@ public class TigerGirlEntity extends AbstractVillager {
                 activities.add(ActivityData.create(Activity.IDLE,
                         ImmutableList.<Pair<Integer, ? extends BehaviorControl<? super TigerGirlEntity>>>of(
                                 Pair.of(1, StartAttacking.<TigerGirlEntity>create(
-                                        (level, self) -> !self.isTrading(),
-                                        (level, self) -> self.getBrain()
-                                                .getMemory(MemoryModuleType.NEAREST_HOSTILE)
-                                                .filter(LivingEntity::isAlive)
+                                        (level, self) -> {
+                                            if (self.isTrading()) return false;
+                                            if (!self.hasHome()) return true;
+                                            BlockPos home = self.getHomePosition();
+                                            double radius = self.getHomeRadius();
+                                            return self.distanceToSqr(home.getX() + 0.5, self.getY(), home.getZ() + 0.5) <= radius * radius;
+                                        },
+                                        (level, self) -> {
+                                            AABB box = self.getBoundingBox().inflate(9.0, 4.0, 9.0);
+                                            return level.getEntitiesOfClass(Monster.class, box,
+                                                            e -> e.isAlive() && !e.isAlliedTo(self) && self.hasLineOfSight(e)
+                                                                    && e.getTarget() instanceof AbstractVillager)
+                                                    .stream()
+                                                    .min(Comparator.comparingDouble(e -> e.distanceToSqr(self)));
+                                        }
                                 )),
-                                Pair.of(2, RandomStroll.stroll(0.5f)),
-                                Pair.of(3, SetEntityLookTargetSometimes.create(EntityType.PLAYER, 6.0f, UniformInt.of(30, 60)))
+                                Pair.of(2, new RunOne<TigerGirlEntity>(List.of(
+                                        Pair.of(RandomStroll.stroll(0.35f), 3),
+                                        Pair.of(SetEntityLookTargetSometimes.create(EntityType.PLAYER, 6.0f, UniformInt.of(40, 80)), 1)
+                                )))
                         )
                 ));
                 activities.add(ActivityData.create(Activity.FIGHT,
@@ -97,6 +130,52 @@ public class TigerGirlEntity extends AbstractVillager {
     public TigerGirlEntity(EntityType<? extends AbstractVillager> type, Level level) {
         super(type, level);
         this.setPersistenceRequired();
+    }
+
+    @Override
+    protected void defineSynchedData(SynchedEntityData.Builder builder) {
+        super.defineSynchedData(builder);
+        builder.define(DATA_IS_ATTACKING, false);
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        if (level().isClientSide()) {
+            boolean isMoving = getDeltaMovement().horizontalDistanceSqr() > 1.0E-6;
+            boolean hasTarget = this.entityData.get(DATA_IS_ATTACKING);
+            if (isMoving && hasTarget) {
+                idleAnimationState.stop();
+                walkAnimationState.stop();
+                runAnimationState.startIfStopped(tickCount);
+            } else if (isMoving) {
+                idleAnimationState.stop();
+                runAnimationState.stop();
+                walkAnimationState.startIfStopped(tickCount);
+            } else {
+                walkAnimationState.stop();
+                runAnimationState.stop();
+                idleAnimationState.startIfStopped(tickCount);
+            }
+        }
+    }
+
+    @Override
+    public boolean doHurtTarget(ServerLevel level, Entity target) {
+        boolean hit = super.doHurtTarget(level, target);
+        if (hit) {
+            level.broadcastEntityEvent(this, EVENT_ATTACK_ANIM);
+        }
+        return hit;
+    }
+
+    @Override
+    public void handleEntityEvent(byte id) {
+        if (id == EVENT_ATTACK_ANIM) {
+            attackAnimationState.start(tickCount);
+        } else {
+            super.handleEntityEvent(id);
+        }
     }
 
     public static AttributeSupplier.Builder createAttributes() {
@@ -139,15 +218,14 @@ public class TigerGirlEntity extends AbstractVillager {
         if (this.isTrading()) {
             brain.eraseMemory(MemoryModuleType.WALK_TARGET);
             this.getNavigation().stop();
-        } else if (this.hasHome() && brain.hasMemoryValue(MemoryModuleType.ATTACK_TARGET)) {
+        } else if (this.hasHome() && !brain.hasMemoryValue(MemoryModuleType.ATTACK_TARGET)) {
             BlockPos home = this.getHomePosition();
-            double leashRange = this.getHomeRadius() + 16.0;
-            if (this.distanceToSqr(home.getX() + 0.5, this.getY(), home.getZ() + 0.5) > leashRange * leashRange) {
-                brain.eraseMemory(MemoryModuleType.ATTACK_TARGET);
-                brain.eraseMemory(MemoryModuleType.WALK_TARGET);
-                this.getNavigation().stop();
+            double radius = this.getHomeRadius();
+            if (this.distanceToSqr(home.getX() + 0.5, this.getY(), home.getZ() + 0.5) > radius * radius) {
+                brain.setMemory(MemoryModuleType.WALK_TARGET, new WalkTarget(home, 0.5f, (int) radius));
             }
         }
+        this.entityData.set(DATA_IS_ATTACKING, brain.hasMemoryValue(MemoryModuleType.ATTACK_TARGET));
         profiler.pop();
         super.customServerAiStep(level);
     }
