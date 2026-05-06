@@ -24,6 +24,7 @@ import net.minecraft.world.entity.ai.Brain;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.behavior.BehaviorControl;
+import net.minecraft.world.entity.ai.behavior.DoNothing;
 import net.minecraft.world.entity.ai.behavior.LookAtTargetSink;
 import net.minecraft.world.entity.ai.behavior.MeleeAttack;
 import net.minecraft.world.entity.ai.behavior.MoveToTargetSink;
@@ -109,8 +110,9 @@ public class TigerGirlEntity extends AbstractVillager {
                                         }
                                 )),
                                 Pair.of(2, new RunOne<TigerGirlEntity>(List.of(
-                                        Pair.of(RandomStroll.stroll(0.35f), 3),
-                                        Pair.of(SetEntityLookTargetSometimes.create(EntityType.PLAYER, 6.0f, UniformInt.of(40, 80)), 1)
+                                        Pair.of(RandomStroll.stroll(0.35f), 2),
+                                        Pair.of(SetEntityLookTargetSometimes.create(EntityType.PLAYER, 6.0f, UniformInt.of(40, 80)), 1),
+                                        Pair.of(new DoNothing(30, 60), 1)
                                 )))
                         )
                 ));
