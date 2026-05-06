@@ -52,6 +52,7 @@ public class TigerGirlVillageHandler {
     @SubscribeEvent
     public static void onServerStarting(ServerStartingEvent event) {
         tickCounter = 0;
+        pendingLivenessConfirmation.clear();
     }
 
     // -----------------------------------------------------------------------
@@ -135,6 +136,12 @@ public class TigerGirlVillageHandler {
                     LOGGER.info("[TigerGirl] Villagers returned to bell {}, reviving village", bell);
                     data.setVillageDead(bell, false);
                     entry = data.getEntry(bell);
+                    // Village revived but TigerGirl was never rescheduled (respawn fired while village
+                    // was dead and consumed the pending timer without rescheduling). Trigger a new spawn.
+                    if (entry.tigerGirlUUID() == null && !data.getPendingRespawns().containsKey(bell)) {
+                        LOGGER.info("[TigerGirl] Village {} revived with no TigerGirl, scheduling spawn", bell);
+                        respawnManager.schedule(bell, level.getGameTime(), data);
+                    }
                 }
 
                 if (entry.tigerGirlUUID() == null) continue;

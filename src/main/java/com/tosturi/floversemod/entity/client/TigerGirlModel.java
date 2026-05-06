@@ -17,6 +17,7 @@ public class TigerGirlModel extends EntityModel<TigerGirlRenderState> {
     public static final ModelLayerLocation LAYER_LOCATION =
             new ModelLayerLocation(Identifier.fromNamespaceAndPath("floversemod", "tiger_girl"), "main");
 
+    private final ModelPart head;
     private final KeyframeAnimation idleAnimation;
     private final KeyframeAnimation walkAnimation;
     private final KeyframeAnimation runAnimation;
@@ -24,6 +25,7 @@ public class TigerGirlModel extends EntityModel<TigerGirlRenderState> {
 
     public TigerGirlModel(ModelPart root) {
         super(root);
+        this.head = root.getChild("Head");
         this.idleAnimation   = TigerGirlModelAnimations.IDLE.bake(root);
         this.walkAnimation   = TigerGirlModelAnimations.WALK.bake(root);
         this.runAnimation    = TigerGirlModelAnimations.RUN.bake(root);
@@ -77,9 +79,12 @@ public class TigerGirlModel extends EntityModel<TigerGirlRenderState> {
     @Override
     public void setupAnim(TigerGirlRenderState renderState) {
         super.setupAnim(renderState);
-        idleAnimation.apply(renderState.idleAnimationState,   renderState.ageInTicks);
-        walkAnimation.apply(renderState.walkAnimationState,   renderState.ageInTicks);
-        runAnimation.apply(renderState.runAnimationState,     renderState.ageInTicks);
+        idleAnimation.apply(renderState.idleAnimationState,     renderState.ageInTicks);
+        walkAnimation.apply(renderState.walkAnimationState,     renderState.ageInTicks);
+        runAnimation.apply(renderState.runAnimationState,       renderState.ageInTicks);
         attackAnimation.apply(renderState.attackAnimationState, renderState.ageInTicks);
+        // yRot is already body-relative (same convention as vanilla VillagerModel).
+        this.head.yRot = renderState.yRot * ((float) Math.PI / 180.0f);
+        this.head.xRot = renderState.xRot * ((float) Math.PI / 180.0f);
     }
 }

@@ -124,7 +124,8 @@ public class TigerGirlVillageData extends SavedData {
             uuidToVillage.remove(old.tigerGirlUUID());
         }
         pendingRespawns.remove(key);
-        villageEntries.put(key, new VillageEntry(uuid, false));
+        boolean wasDead = old != null && old.villageDead();
+        villageEntries.put(key, new VillageEntry(uuid, wasDead));
         uuidToVillage.put(uuid, key);
         setDirty();
     }
