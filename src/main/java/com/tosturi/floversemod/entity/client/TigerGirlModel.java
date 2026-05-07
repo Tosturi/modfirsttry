@@ -37,8 +37,8 @@ public class TigerGirlModel extends EntityModel<TigerGirlRenderState> {
         PartDefinition partdefinition = meshdefinition.getRoot();
 
         PartDefinition Head = partdefinition.addOrReplaceChild("Head", CubeListBuilder.create().texOffs(0, 0).addBox(-4.0F, -8.0F, -4.0F, 8.0F, 8.0F, 8.0F, new CubeDeformation(0.0F))
-                .texOffs(49, 8).addBox(3.0F, -9.25F, -1.0F, 2.0F, 2.0F, 1.25F, new CubeDeformation(0.0F))
-                .texOffs(0, 0).addBox(-5.0F, -9.25F, -1.0F, 2.0F, 2.0F, 1.24F, new CubeDeformation(0.0F)), PartPose.offset(0.0F, 0.0F, 0.0F));
+                .texOffs(25, 1).addBox(3.0F, -9.25F, -1.0F, 2.0F, 2.0F, 1.25F, new CubeDeformation(0.0F))
+                .texOffs(1, 2).addBox(-5.0F, -9.25F, -1.0F, 2.0F, 2.0F, 1.24F, new CubeDeformation(0.0F)), PartPose.offset(0.0F, 0.0F, 0.0F));
 
         Head.addOrReplaceChild("Hair", CubeListBuilder.create().texOffs(32, 48).addBox(-4.0F, -7.0F, -4.0F, 8.0F, 7.0F, 8.0F, new CubeDeformation(0.4F))
                 .texOffs(34, 34).addBox(-5.0F, -7.0F, -3.0F, 1.0F, 5.0F, 6.0F, new CubeDeformation(0.0F))
@@ -54,7 +54,7 @@ public class TigerGirlModel extends EntityModel<TigerGirlRenderState> {
         whiskers.addOrReplaceChild("whiskers_1_r1", CubeListBuilder.create().texOffs(0, 7).mirror().addBox(-1.0F, -0.05F, -1.0F, 2.0F, 0.05F, 0.0F, new CubeDeformation(0.0F)).mirror(false), PartPose.offsetAndRotation(2.25F, -2.25F, -3.25F, 0.0F, 0.2909F, 0.0F));
 
         partdefinition.addOrReplaceChild("Body", CubeListBuilder.create().texOffs(0, 17).addBox(-4.0F, -24.0F, -2.0F, 8.0F, 12.0F, 4.0F, new CubeDeformation(0.0F))
-                .texOffs(0, 66).addBox(-4.25F, -12.1F, -2.25F, 8.5F, 3.0F, 4.5F, new CubeDeformation(0.0F)), PartPose.offset(0.0F, 24.0F, 0.0F));
+                .texOffs(1, 69).addBox(-4.25F, -12.1F, -2.25F, 8.5F, 3.0F, 4.5F, new CubeDeformation(0.0F)), PartPose.offset(0.0F, 24.0F, 0.0F));
 
         partdefinition.addOrReplaceChild("Right Hand", CubeListBuilder.create().texOffs(17, 34).addBox(-3.0F, -2.0F, -2.0F, 4.0F, 12.0F, 4.0F, new CubeDeformation(0.0F)), PartPose.offset(-5.0F, 2.0F, 0.0F));
 

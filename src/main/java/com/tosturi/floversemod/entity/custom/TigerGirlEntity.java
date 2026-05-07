@@ -25,6 +25,7 @@ import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.behavior.BehaviorControl;
 import net.minecraft.world.entity.ai.behavior.DoNothing;
+import net.minecraft.world.entity.ai.behavior.EntityTracker;
 import net.minecraft.world.entity.ai.behavior.LookAtTargetSink;
 import net.minecraft.world.entity.ai.behavior.MeleeAttack;
 import net.minecraft.world.entity.ai.behavior.MoveToTargetSink;
@@ -109,9 +110,9 @@ public class TigerGirlEntity extends AbstractVillager {
                                                     .min(Comparator.comparingDouble(e -> e.distanceToSqr(self)));
                                         }
                                 )),
-                                Pair.of(2, new RunOne<TigerGirlEntity>(List.of(
+                                Pair.of(2, SetEntityLookTargetSometimes.create(EntityType.PLAYER, 6.0f, UniformInt.of(20, 40))),
+                                Pair.of(3, new RunOne<TigerGirlEntity>(List.of(
                                         Pair.of(RandomStroll.stroll(0.35f), 2),
-                                        Pair.of(SetEntityLookTargetSometimes.create(EntityType.PLAYER, 6.0f, UniformInt.of(40, 80)), 1),
                                         Pair.of(new DoNothing(30, 60), 1)
                                 )))
                         )
@@ -220,6 +221,10 @@ public class TigerGirlEntity extends AbstractVillager {
         if (this.isTrading()) {
             brain.eraseMemory(MemoryModuleType.WALK_TARGET);
             this.getNavigation().stop();
+            Player tradingPlayer = this.getTradingPlayer();
+            if (tradingPlayer != null) {
+                brain.setMemory(MemoryModuleType.LOOK_TARGET, new EntityTracker(tradingPlayer, true));
+            }
         } else if (this.hasHome() && !brain.hasMemoryValue(MemoryModuleType.ATTACK_TARGET)) {
             BlockPos home = this.getHomePosition();
             double radius = this.getHomeRadius();
